@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: library_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-library}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-library}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - library_net
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: library_api
+    restart: unless-stopped
+    environment:
+      APP_NAME: ManagerLibrary
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY:-base64:c29tZXJhbmRvbWtleWZvcm1hbmFnZXJsaWJyYXJ5MTIzNA==}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-library}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-library_jwt_secret_key_minimum_32_characters_long_12345}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123*!}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - library_net
+
+  app:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api/v1}
+    container_name: library_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5173}:5173"
+    depends_on:
+      - api
+    networks:
+      - library_net
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  library_net:
+    driver: bridge
